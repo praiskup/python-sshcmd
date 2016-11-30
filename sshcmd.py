@@ -8,6 +8,9 @@ class SSHConnection:
     control_path = None
     ssh_options = [
         '-o', 'ControlMaster=auto',
+        # Don't bother with host key checking.
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile=/dev/null',
         '-o', 'ControlPersist=600',
         # One hour deadline.
         '-o', 'ServerAliveInterval=300',
