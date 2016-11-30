@@ -11,8 +11,10 @@ class SSHConnection:
         # Don't bother with host key checking.
         '-o', 'StrictHostKeyChecking=no',
         '-o', 'UserKnownHostsFile=/dev/null',
-        '-o', 'ControlPersist=600',
-        # One hour deadline.
+        # When not explcitly disconnect()ed, garbage collect the background
+        # process and socket file after two hours.
+        '-o', 'ControlPersist=7200',
+        # One hour deadline for particular connection.
         '-o', 'ServerAliveInterval=300',
         '-o', 'ServerAliveCountMax=12',
     ]
