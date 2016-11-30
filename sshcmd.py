@@ -1,4 +1,4 @@
-import time
+from datetime import datetime
 from subprocess import call
 
 class SSHConnection:
@@ -32,9 +32,19 @@ class SSHConnection:
         return '{0}@{1}'.format(self.user, self.host)
 
     def connect(self):
+        dt = datetime.now()
+        timestamp = "{year}-{month}-{day}_{h:02d}:{m:02d}:{s:02d}_{us}".format(
+            h=dt.hour,
+            m=dt.minute,
+            s=dt.second,
+            us=dt.microsecond,
+            year=dt.year,
+            month=dt.month,
+            day=dt.day,
+        )
         self.control_path = [
             '-o',
-            'ControlPath=~/.ssh/control/ssh-%r@%h:%p_{0}' .format(time.time()),
+            'ControlPath=~/.ssh/control/{0}_ssh-%r@%h:%p'.format(timestamp),
         ]
         call(self._ssh_base(['-fMN']))
 
