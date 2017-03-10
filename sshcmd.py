@@ -128,10 +128,20 @@ class SSHConnectionParamiko(SSHConnection):
     def connect(self):
         self.conn = paramiko.SSHClient()
         self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.conn.connect(
-            hostname=self.host, port=self.port,
-            username=self.user,
-            key_filename=self.identityfile)
+        try:
+            self.conn.connect(
+                hostname=self.host, port=self.port,
+                username=self.user,
+                key_filename=self.identityfile)
+        except paramiko.AuthenticationException as err:
+            raise SSHConnectionError(str(err))
+        except paramiko.SSHException as err:
+            raise SSHConnectionError(str(err))
+        except socket.error as err:
+            raise SSHConnectionError(str(err))
+        except paramiko.ssh_exception.NoValidConnectionsError as err:
+            raise SSHConnectionError(str(err))
+
 
     def _run(self, user_command, stdout, stderr):
         try:
