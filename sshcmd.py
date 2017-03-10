@@ -1,21 +1,27 @@
 import os
 from datetime import datetime
-from subprocess import call
-
+import subprocess
+import select
+from pipes import quote
+import paramiko
 
 class SSHConnectionError(Exception):
     pass
 
 
 class Shell(object):
-    def _run(self, user_command):
+    def _run(self, user_command, stdout, stderr):
         raise NotImplementedError("Shell class is not self-standing.")
 
     def info_string(self):
         return "no-info"
 
-    def run(self, user_command):
-        return self._run(user_command)
+    def run(self, user_command, stdout=None, stderr=None):
+        rc = -1
+        with open(os.devnull, "w") as devnull:
+            rc = self._run(user_command, stdout or devnull, stderr or devnull)
+
+        return rc
 
 
 class SSHConnection(Shell):
@@ -97,18 +103,68 @@ class SSHConnectionRaw(SSHConnection):
             22,
         )
 
-        if call(self._ssh_base(['-fMN'])) != 0:
+        if subprocess.call(self._ssh_base(['-fMN'])) != 0:
             raise SSHConnectionError("Can't connect to ssh server.")
 
     def disconnect(self):
-        call(self._ssh_base(['-O', 'stop']))
+        subprocess.call(self._ssh_base(['-O', 'stop']))
         self.control_path = None
 
-    def _run(self, user_command):
+    def _run(self, user_command, stdout, stderr):
         real_command = self._ssh_base() + [user_command]
-        retval = call(real_command)
+        proc = subprocess.Popen(real_command, stdout=stdout, stderr=stderr)
+        retval = proc.wait()
         if retval == 255:
             if not os.path.exists(os.path.expanduser(self.control_path)):
                 raise SSHConnectionError("Connection broke.")
 
         return retval
+
+
+class SSHConnectionParamiko(SSHConnection):
+    conn = None
+
+    def connect(self):
+        self.conn = paramiko.SSHClient()
+        self.conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.conn.connect(
+            hostname=self.host, port=self.port,
+            username=self.user,
+            key_filename=self.identityfile)
+
+    def _run(self, user_command, stdout, stderr):
+        try:
+            transport = self.conn.get_transport()
+            channel = transport.open_session()
+            channel.exec_command(user_command)
+        except paramiko.SSHException:
+            raise SSHConnectionError("Paramiko connection failure.")
+
+        # Drats!  How clumsy the API of paramiko is.
+        while True:
+            something_found = False
+
+            # Just to slow down things a bit.
+            _, _, _ = select.select([channel], [], [], 10)
+
+            if channel.recv_ready():
+                data = channel.recv(256)
+                if len(data) != 0:
+                    stdout.buffer.write(data)
+                    stdout.flush()
+                    something_found = True
+
+            if channel.recv_stderr_ready():
+                data = channel.recv_stderr(256)
+                if len(data) != 0:
+                    stderr.buffer.write(data)
+                    stderr.flush()
+                    something_found = True
+
+            if not something_found:
+                break
+
+        return channel.recv_exit_status()
+
+    def disconnect(self):
+        pass
