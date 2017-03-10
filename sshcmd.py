@@ -7,7 +7,7 @@ class SSHConnectionError(Exception):
     pass
 
 
-class Shell:
+class Shell(object):
     def _run(self, user_command):
         raise NotImplementedError("Shell class is not self-standing.")
 
@@ -21,7 +21,27 @@ class Shell:
 class SSHConnection(Shell):
     user = 'root'
     host = 'localhost'
+    port = 22
+    identityfile = None
 
+    def __init__(self, username, host, port=22, identityfile=None):
+        self.host = host
+        self.user = username
+        self.port = port
+        if identityfile:
+            self.identityfile = os.path.expanduser(identityfile)
+
+    def connect(self):
+        raise NotImplementedError
+
+    def disconnect(self):
+        raise NotImplementedError
+
+    def info_string(self):
+        return 'raw-ssh-{0}@{1}'.format(self.user, self.host)
+
+
+class SSHConnectionRaw(SSHConnection):
     control_path = None
     ssh_options = [
         '-o', 'ControlMaster=auto',
@@ -34,18 +54,25 @@ class SSHConnection(Shell):
         # One hour deadline for particular connection.
         '-o', 'ServerAliveInterval=300',
         '-o', 'ServerAliveCountMax=12',
+        # For now we don't allow password auth.
+        '-o', 'PasswordAuthentication=no',
         '-q',
     ]
 
-    def info_string(self):
-        return '{0}@{1}'.format(self.user, self.host)
+    def __init__(self, *args, **kwargs):
+        super(SSHConnectionRaw, self).__init__(*args, **kwargs)
 
     def _ssh_base(self, additional_options=None):
         if additional_options is None:
             additional_options = []
         cmd = ['ssh'] + additional_options + self.ssh_options
+
         if self.control_path:
             cmd = cmd + ['-o', 'ControlPath=' + self.control_path]
+
+        if self.identityfile:
+            cmd = cmd + ['-o', 'IdentityFile=' + self.identityfile]
+
         cmd.append(self._conn_id())
         return cmd
 
@@ -85,7 +112,3 @@ class SSHConnection(Shell):
                 raise SSHConnectionError("Connection broke.")
 
         return retval
-
-    def __init__(self, username, host):
-        self.host = host
-        self.user = username
