@@ -4,6 +4,7 @@ import subprocess
 import select
 from pipes import quote
 import paramiko
+import socket
 
 class SSHConnectionError(Exception):
     pass
@@ -140,31 +141,41 @@ class SSHConnectionParamiko(SSHConnection):
         except paramiko.SSHException:
             raise SSHConnectionError("Paramiko connection failure.")
 
-        # Drats!  How clumsy the API of paramiko is.
-        while True:
-            something_found = False
 
-            # Just to slow down things a bit.
-            _, _, _ = select.select([channel], [], [], 10)
+        status = 1
+        try:
+            # Drats!  How clumsy the API of paramiko is.
+            while True:
+                something_found = False
 
-            if channel.recv_ready():
-                data = channel.recv(256)
-                if len(data) != 0:
-                    stdout.buffer.write(data)
-                    stdout.flush()
-                    something_found = True
+                # Just to slow down things a bit.
+                _, _, _ = select.select([channel], [], [], 10)
 
-            if channel.recv_stderr_ready():
-                data = channel.recv_stderr(256)
-                if len(data) != 0:
-                    stderr.buffer.write(data)
-                    stderr.flush()
-                    something_found = True
+                if channel.recv_ready():
+                    data = channel.recv(256)
+                    if len(data) != 0:
+                        stdout.buffer.write(data)
+                        stdout.flush()
+                        something_found = True
 
-            if not something_found:
-                break
+                if channel.recv_stderr_ready():
+                    data = channel.recv_stderr(256)
+                    if len(data) != 0:
+                        stderr.buffer.write(data)
+                        stderr.flush()
+                        something_found = True
 
-        return channel.recv_exit_status()
+                if not something_found:
+                    break
+
+            status = channel.recv_exit_status()
+        except socket.timeout:
+            raise SSHConnectionError('Socket timeout error.')
+
+        if status == -1:
+            raise SSHConnectionError('Paramiko connection broke.')
+
+        return status
 
     def disconnect(self):
         pass
