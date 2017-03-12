@@ -24,6 +24,20 @@ class Shell(object):
 
         return rc
 
+    def run_expensive(self, user_command):
+        """
+        Return exit status together with standard outputs in string variables.
+        Note that this can pretty easily waste a lot of memory.
+
+        :param user_command:
+            Command to be run as string (note: pipes.quote).
+
+        :returns:
+            Tripple (rc, stdout, stderr).  Stdout and stderr are strings, those
+            might be pretty large.
+        """
+        raise NotImplementedError
+
 
 class SSHConnection(Shell):
     user = 'root'
@@ -111,6 +125,7 @@ class SSHConnectionRaw(SSHConnection):
         subprocess.call(self._ssh_base(['-O', 'stop']))
         self.control_path = None
 
+
     def _run(self, user_command, stdout, stderr):
         real_command = self._ssh_base() + [user_command]
         proc = subprocess.Popen(real_command, stdout=stdout, stderr=stderr)
@@ -120,6 +135,18 @@ class SSHConnectionRaw(SSHConnection):
                 raise SSHConnectionError("Connection broke.")
 
         return retval
+
+
+    def run_expensive(self, user_command):
+        real_command = self._ssh_base() + [user_command]
+        proc = subprocess.Popen(real_command, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        if proc.returncode == 255:
+            if not os.path.exists(os.path.expanduser(self.control_path)):
+                raise SSHConnectionError("Connection broke.")
+
+        return proc.returncode, stdout, stderr
 
 
 class SSHConnectionParamiko(SSHConnection):
@@ -186,6 +213,16 @@ class SSHConnectionParamiko(SSHConnection):
             raise SSHConnectionError('Paramiko connection broke.')
 
         return status
+
+
+    def run_expensive(self, user_command):
+        try:
+            _, cout, cerr = self.conn.exec_command(user_command)
+            return cout.channel.recv_exit_status(), cout.read(), cerr.read()
+
+        except paramiko.SSHException:
+            raise SSHConnectionError('Paramiko connection broke.')
+
 
     def disconnect(self):
         pass
