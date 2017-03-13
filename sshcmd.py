@@ -72,9 +72,9 @@ class SSHConnectionRaw(SSHConnection):
         # When not explcitly disconnect()ed, garbage collect the background
         # process and socket file after two hours.
         '-o', 'ControlPersist=7200',
-        # One hour deadline for particular connection.
-        '-o', 'ServerAliveInterval=300',
-        '-o', 'ServerAliveCountMax=12',
+        # fail after 3x15 seconds unresponsive builder
+        '-o', 'ServerAliveInterval=15',
+        '-o', 'ServerAliveCountMax=3',
         # For now we don't allow password auth.
         '-o', 'PasswordAuthentication=no',
         '-q',
