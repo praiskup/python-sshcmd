@@ -118,6 +118,14 @@ class SSHConnectionRaw(SSHConnection):
             22,
         )
 
+        self.control_path = os.path.expanduser(self.control_path)
+        dirname = os.path.dirname(self.control_path)
+        if not os.path.exists(dirname):
+            try:
+                os.makedirs(dirname, mode=0700)
+            except:
+                raise SSHConnectionError("Can't create ssh control dir {0}".format(dirname))
+
         if subprocess.call(self._ssh_base(['-fMN'])) != 0:
             raise SSHConnectionError("Can't connect to ssh server.")
 
