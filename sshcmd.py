@@ -111,7 +111,8 @@ class SSHConnectionRaw(SSHConnection):
             month=dt.month,
             day=dt.day,
         )
-        self.control_path = '~/.ssh/control/{0}_ssh-{1}@{2}:{3}'.format(
+        self.control_path = '~/.ssh/control/pid-{0}-{1}_ssh-{2}@{3}:{4}'.format(
+            os.getpid(),
             timestamp,
             self.user,
             self.host,
